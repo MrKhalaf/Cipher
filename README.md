@@ -1,6 +1,6 @@
 # Cipher
 
-![Cipher Logo](assets/textLogoCipher.png)
+<img src="assets/textLogoCipher.png" alt="Cipher Logo" width="400">
 
 Messaging app exploring networking protocols and encryption
 
