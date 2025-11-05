@@ -2,9 +2,9 @@ from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-
-from pydantic import BaseModel
 import os
+from pydantic import BaseModel
+import sqlite3
 
 app = FastAPI()
 
@@ -28,8 +28,17 @@ class Message(BaseModel):
 # When we switch to websockets I'll use async since we'll need to await on the Websocket session
 @app.post("/api/message")
 def message(content: str, senderId: str, receiverId: str):
-    sender = User(userId=senderId, displayName="Mohammad S. Khalaf")
-    receiver = User(userId=receiverId, displayName="Khader A. Murtaja")
+    conn = sqlite3.connect('storage/cipher.db')
+    cursor = conn.cursor()
+
+    # fetch displayName (just for testing purposes)
+    cursor.execute('SELECT displayName FROM users WHERE userId = ?', (senderId,))
+    senderName = cursor.fetchone()[0]
+    cursor.execute('SELECT displayName FROM users WHERE userId = ?', (receiverId,))
+    receiverName = cursor.fetchone()[0]
+
+    sender = User(userId=senderId, displayName=senderName)
+    receiver = User(userId=receiverId, displayName=receiverName)
 
     msg = Message(
         sender=sender,
@@ -38,12 +47,20 @@ def message(content: str, senderId: str, receiverId: str):
         timestamp=datetime.now()
     )
 
+    # SQLite upload of the message
+    cursor.execute('INSERT INTO messages (senderId, receiverId, content, timestamp) VALUES (?, ?, ?, ?)',
+                   (msg.sender.userId, msg.receiver.userId, msg.content, msg.timestamp)
+                   )
+    conn.commit()
+    conn.close()
+
+
     # for now, we just persist messages in a text file
     os.makedirs("storage", exist_ok=True)
     with open("storage/chats.txt", "a") as f:
         f.write(f"[{msg.timestamp}] {msg.sender.displayName} -> {msg.receiver.displayName}: {msg.content}\n")
 
-    print(f"Wrote \"{msg.content}\" from user {msg.sender.displayName} to user {msg.receiver.displayName} into chats.json")
+    print(f"Wrote \"{msg.content}\" from {sender.displayName} to {receiver.displayName} into chats.txt")
     return {"status": "sent", "message": msg}
 
 @app.get("/")
