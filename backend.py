@@ -38,10 +38,10 @@ def message(content: str, senderId: str, receiverId: str):
         timestamp=datetime.now()
     )
 
-    # for now, we just persist messages in a JSON file
+    # for now, we just persist messages in a text file
     os.makedirs("storage", exist_ok=True)
-    with open("storage/chats.json", "w") as f:
-        f.write(msg.model_dump_json(indent=2))
+    with open("storage/chats.txt", "a") as f:
+        f.write(f"[{msg.timestamp}] {msg.sender.displayName} -> {msg.receiver.displayName}: {msg.content}\n")
 
     print(f"Wrote \"{msg.content}\" from user {msg.sender.displayName} to user {msg.receiver.displayName} into chats.json")
     return {"status": "sent", "message": msg}
