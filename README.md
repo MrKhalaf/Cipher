@@ -13,9 +13,11 @@ pip install -r requirements.txt
 
 ### 2. Initialize database
 ```bash
-python scripts/sqlite_setup.py
+python scripts/sqlite_setup.py  # Creates storage/ directory and cipher.db
 python scripts/seed_data.py
 ```
+
+**Note**: The setup script automatically creates the `storage/` directory if it doesn't exist. This directory is git-ignored and contains your local SQLite database.
 
 ### 3. Run the server
 ```bash

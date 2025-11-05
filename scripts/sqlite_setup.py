@@ -1,4 +1,8 @@
 import sqlite3
+import os
+
+# Ensure storage directory exists
+os.makedirs('storage', exist_ok=True)
 
 conn = sqlite3.connect('storage/cipher.db')
 c = conn.cursor()
