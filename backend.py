@@ -55,13 +55,29 @@ def message(content: str, senderId: str, receiverId: str):
     conn.close()
 
 
-    # for now, we just persist messages in a text file
-    os.makedirs("storage", exist_ok=True)
-    with open("storage/chats.txt", "a") as f:
-        f.write(f"[{msg.timestamp}] {msg.sender.displayName} -> {msg.receiver.displayName}: {msg.content}\n")
+    print(f"Wrote \"{msg.content}\" from {sender.displayName} to {receiver.displayName} into DB")
+    return {"status": 200, "message": msg}
 
-    print(f"Wrote \"{msg.content}\" from {sender.displayName} to {receiver.displayName} into chats.txt")
-    return {"status": "sent", "message": msg}
+
+# Fetch all the messages sent to and by the user from the DB
+@app.get("/api/message")
+def fetchMessages(userId: str):
+    conn = sqlite3.connect('storage/cipher.db')
+    cursor = conn.cursor()
+    messages= cursor.execute(
+        '''
+        SELECT * FROM messages 
+        WHERE senderId = (?) OR receiverId = (?) 
+        ''', (userId, userId))
+    
+    chat_history = []
+    for msg in messages:
+        chat_history.append(msg)
+
+    print(f"messages for {userId}:\n{chat_history}")
+
+    return {"status": 200, "chat_history": chat_history}
+
 
 @app.get("/")
 async def root():

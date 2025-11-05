@@ -28,9 +28,16 @@ messages = [
     ('mohammad', 'khader', 'That\'s awesome! Can\'t wait to see it. When can we deploy?', base_time + timedelta(minutes=2)),
     ('khader', 'mohammad', 'It\'s ready to go! Want me to show you a demo first?', base_time + timedelta(minutes=5)),
     ('mohammad', 'khader', 'Absolutely! I\'m excited to see what you\'ve built', base_time + timedelta(minutes=7)),
+    ('khader', 'mohammad', 'The SQLite integration is working perfectly too!', base_time + timedelta(minutes=10)),
+    ('mohammad', 'khader', 'Great work! Let\'s get this deployed soon', base_time + timedelta(minutes=12)),
 
-    # One additional message from Alice to Mohammad
-    ('alice', 'mohammad', 'Hey Mohammad, heard about the new Cipher release. Congrats!', base_time + timedelta(hours=1))
+    # Messages from Alice to Mohammad
+    ('alice', 'mohammad', 'Hey Mohammad, heard about the new Cipher release. Congrats!', base_time + timedelta(hours=1)),
+    ('mohammad', 'alice', 'Thanks Alice! We\'re really excited about it', base_time + timedelta(hours=1, minutes=3)),
+
+    # Messages between Alice and Khader
+    ('alice', 'khader', 'Khader, the new UI looks amazing!', base_time + timedelta(hours=1, minutes=15)),
+    ('khader', 'alice', 'Thank you! It was a lot of work but totally worth it', base_time + timedelta(hours=1, minutes=18))
 ]
 
 for senderId, receiverId, content, timestamp in messages:
