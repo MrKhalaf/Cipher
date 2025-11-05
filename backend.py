@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import os
@@ -76,8 +76,19 @@ def fetchMessages(userId: str):
 
     print(f"messages for {userId}:\n{chat_history}")
 
-    return {"status": 200, "chat_history": chat_history}
+    return {"chat_history": chat_history}
 
+# Create a new user
+@app.post("/api/users")
+def createUser(userId: str, displayName: str):
+    with sqlite3.connect('storage/cipher.db') as conn:
+        cursor = conn.cursor()
+
+        cursor.execute('INSERT OR REPLACE INTO users (userId, displayName) VALUES (?, ?)',
+                  (userId, displayName))
+        conn.commit()
+
+    return {"userId": userId, "displayName": displayName}
 
 @app.get("/")
 async def root():
