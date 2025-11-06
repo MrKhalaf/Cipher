@@ -26,6 +26,7 @@ class Message(BaseModel):
 
 # Util functions
 
+
 def parse_time(time_str: str):
     """Convert SQLite timestamp str to datetime object"""
     if isinstance(time_str, str):
