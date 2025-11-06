@@ -113,6 +113,23 @@ def createUser(userId: str, displayName: str):
 
     return {"userId": userId, "displayName": displayName}
 
+# Get all users (optionally filtered by search string)
+@app.get("/api/users")
+def fetch_all_users(search: str = None):
+    with sqlite3.connect('storage/cipher.db') as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if search:
+            # Search for users whose displayName contains the search string
+            cursor.execute('SELECT * FROM users WHERE displayName LIKE ?', (f'%{search}%',))
+        else:
+            cursor.execute('SELECT * FROM users')
+
+        users = [User(userId=row['userId'], displayName=row['displayName']) for row in cursor.fetchall()]
+
+    return {"users": users, "is_search": search is not None}
+
 @app.get("/")
 async def root():
     with open("frontend/index.html") as f:
