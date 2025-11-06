@@ -1,8 +1,8 @@
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 import sqlite3
 
 app = FastAPI()
@@ -12,21 +12,82 @@ class User(BaseModel):
     displayName: str
     userId: str
 
-class Message(BaseModel):
+# MessageRecord is used to pull full context for messages received when the user wasn't logged on
+class MessageRecord(BaseModel):
     sender: User
     receiver: User
     content: str
     timestamp: datetime
 
+# class for when the message is sent during websocket connection
+class Message(BaseModel):
+    receiverId: str
+    content: str
+
 # Util functions
+
 def parse_time(time_str: str):
     """Convert SQLite timestamp str to datetime object"""
     if isinstance(time_str, str):
         return datetime.strptime(time_str, '%Y-%m-%d %H:%M:%S.%f')
     return time_str
 
+def get_validated_user(userId:str):
+    with sqlite3.connect('storage/cipher.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT displayName FROM users WHERE userId = (?)", (userId,))
+        result = cursor.fetchone()
+
+        if result:
+            return User(userId=userId, displayName=result[0])
+        return None
+
+'''Store message in the central messages table. Returns true if message is stored'''
+def store_message(msg: Message, senderId: str):
+    with sqlite3.connect('storage/cipher.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO messages (senderId, receiverId, content, timestamp) VALUES (?, ?, ?, ?)',
+                       (senderId, msg.receiverId, msg.content, datetime.now())
+                       )
+        conn.commit() # push to db
+
+# In memory store for session maintenance (for live chat & presence APIs)
+active_connections: dict[str, WebSocket] = {}
+
 # TODO: WS /ws/typing  
 # TODO: GET /api/presence
+
+@app.websocket("/ws/session")
+async def session(ws:WebSocket, userId: str):
+    user: User = get_validated_user(userId)
+    # return unauthorized if user id doesnt exist
+    if not user:
+        await ws.close(code=4401, reason="unauthorized")
+        return
+    
+    # await to begin the ws connection until we confirm FastAPI sent it
+    await ws.accept()
+    active_connections[userId] = ws # add new connection
+
+    try:
+        while True:
+            # TODO: consider how we can add HTTP header to receive more than just messages.
+            data = await ws.receive_json() 
+
+            # Pydantic for validating the JSON we get from client matches Message
+            try:
+                msg = Message(**data)
+            except ValidationError as e:
+                # keep connection alive, but let client know structure is wrong
+                await ws.send_json({"error": "Invalid message format", "details": str(e)})
+                continue
+
+            # Store the validated Message in the Database
+            store_message(msg, userId)
+            
+    except WebSocketDisconnect:
+        active_connections.pop(userId, None) # remove connection from record
+
 
 # Post a generic HTTP message
 # This is not async now since we're using standard HTTP so it can run in thread pool as opposed to singlethreaded event loop.
@@ -50,7 +111,7 @@ def message(content: str, senderId: str, receiverId: str):
         sender = User(userId=senderId, displayName=sender_name)
         receiver = User(userId=receiverId, displayName=receiver_name)
 
-        msg = Message(
+        msg = MessageRecord(
             sender=sender,
             receiver=receiver,
             content=content,
@@ -89,7 +150,7 @@ def fetchMessages(userId: str):
         for row in cursor.fetchall():
             # Parse timestamp string to datetime object
 
-            msg = Message(
+            msg = MessageRecord(
                 sender=User(userId=row['senderId'], displayName=row['senderName']),
                 receiver=User(userId=row['receiverId'], displayName=row['receiverName']),
                 content=row['content'],
