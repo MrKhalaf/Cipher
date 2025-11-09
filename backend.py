@@ -99,12 +99,12 @@ def message(content: str, senderId: str, receiverId: str):
 
         # fetch displayName (validate users exist)
         cursor.execute('SELECT displayName FROM users WHERE userId = ?', (senderId,))
-        sender_name = cursor.fetchone()[0]
+        sender_name = cursor.fetchone()
         if not sender_name:
             raise HTTPException(status_code=404, detail=f"User {senderId} not found")
 
         cursor.execute('SELECT displayName FROM users WHERE userId = ?', (receiverId,))
-        receiver_name = cursor.fetchone()[0]
+        receiver_name = cursor.fetchone()
         if not receiver_name:
             raise HTTPException(status_code=404, detail=f"User {receiverId} not found")
 
