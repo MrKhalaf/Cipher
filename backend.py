@@ -158,13 +158,13 @@ def message(content: str, senderId: str, receiverId: str):
         error to whoever made the request.
         '''
         cursor.execute('SELECT displayName FROM users WHERE userId = ?', (senderId,))
-        sender_name = cursor.fetchone()[0]
+        sender_name = cursor.fetchone()
         if not sender_name:
             raise HTTPException(status_code=404, detail=f"User {senderId} not found")
 
         # Same validation for the receiver - make sure they exist in the database
         cursor.execute('SELECT displayName FROM users WHERE userId = ?', (receiverId,))
-        receiver_name = cursor.fetchone()[0]
+        receiver_name = cursor.fetchone()
         if not receiver_name:
             raise HTTPException(status_code=404, detail=f"User {receiverId} not found")
 
@@ -174,8 +174,8 @@ def message(content: str, senderId: str, receiverId: str):
 
         This is like creating a struct/object in Swift or a data class in Kotlin.
         '''
-        sender = User(userId=senderId, displayName=sender_name)
-        receiver = User(userId=receiverId, displayName=receiver_name)
+        sender = User(userId=senderId, displayName=sender_name[0])
+        receiver = User(userId=receiverId, displayName=receiver_name[0])
 
         '''
         Now we create our Message object with all the required fields.
