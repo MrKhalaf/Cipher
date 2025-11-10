@@ -244,6 +244,42 @@ def fetch_all_users(search: str = None):
 
     return {"users": users, "is_search": search is not None}
 
+#  Get all online users
+@app.get("/api/presence")
+def fetch_online_users(userId: str = None):
+    """Get all online users, optionally excluding the requesting userId"""
+    # If userId is provided, return only that user's presence status
+    if userId:
+        online = userId in active_connections # check if user is online
+        user = get_validated_user(userId) # get user details
+
+        # return presence status
+        return {
+            "userId": userId,
+            "displayName": user.displayName if user else None,
+            "isOnline": online
+        }
+    # Otherwise, return the list of all online users
+    else:
+        online_users = [] # list of online users
+        
+        # loop through the active connections and get users ids
+        for uid in active_connections.keys():
+            user = get_validated_user(uid) # validate user exists
+            
+            # only add if user is valid
+            if user:
+                online_users.append({
+                    "userId": uid,
+                    "displayName": user.displayName
+                })
+            
+            # return presence status
+            return {
+                "onlineUser": online_users,
+                "count": len(online_users)
+            }
+
 @app.get("/")
 async def root():
     with open("frontend/index.html") as f:
