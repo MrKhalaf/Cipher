@@ -80,14 +80,6 @@ async def session(ws:WebSocket, userId: str):
                 await ws.send_json({"error": "Invalid message format", "details": str(e)})
                 continue
 
-            # validate sender is not impersonating someone else
-            if msg.senderId != userId:
-                await ws.send_json({
-                    "error": "Unauthorized",
-                    "details": "Cannot send messages as another user"
-                })
-                continue
-
             # validate recipient exists
             recipient = get_validated_user(msg.receiverId)
             if not recipient:
@@ -107,9 +99,14 @@ async def session(ws:WebSocket, userId: str):
 
             # if recipient is online, pipe the message straight to them
             if recipient.userId in active_connections:
-                await active_connections[recipient.userId].send_json(
-                    msg.model_dump()
-                )
+                try:
+                    await active_connections[recipient.userId].send_json(
+                        msg.model_dump()
+                    )
+                except Exception:
+                    # Recipient disconnected between check and send
+                    # Message already stored in DB, so just continue
+                    pass
 
     except WebSocketDisconnect:
         active_connections.pop(userId, None) # remove connection from record
