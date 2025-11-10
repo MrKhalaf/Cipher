@@ -120,6 +120,7 @@ async def session(ws:WebSocket, userId: str):
             message_type = data.get("type", "message") # default to message type
 
             # Pydantic for validating the JSON we get from client matches Message
+            # Handle chat message
             if message_type == "message":
                 try:
                     msg = Message(**data)
@@ -130,8 +131,12 @@ async def session(ws:WebSocket, userId: str):
                         "error": "Invalid message format",
                         "details": str(e)
                     })
+            
+            # Handle presence request
             elif message_type == "presence":
                 await send_presence_update(ws)
+            
+            # Unknown message type
             else:
                 await ws.send_json({
                     "type": "error",
