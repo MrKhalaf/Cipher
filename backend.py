@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +24,20 @@ class MessageRecord(BaseModel):
 class Message(BaseModel):
     receiverId: str
     content: str
+
+# Base class for WebSocket messages
+class WebSocketMessage(BaseModel):
+    type: str  # e.g., "message", "presence"
+
+# Chat message
+class ChatMessage(WebSocketMessage):
+    type: Literal["message"] = "message"
+    receiver: str
+    content: str
+
+# Presence update
+class PresenceRequest(WebSocketMessage):
+    type: Literal["presence"] = "presence"
 
 # Util functions
 
@@ -52,6 +67,31 @@ def store_message(msg: Message, senderId: str):
                        )
         conn.commit() # push to db
 
+async def send_presence_update(ws: WebSocket):
+    """Sends presence update list to the web socket connections"""
+    # List of online users
+    online_users = []
+
+    # loop through the active connections and get users ids
+    for uid in active_connections.keys():
+        # validate user exists
+        user = get_validated_user(uid)
+        # only add if user is valid
+        if user:
+            online_users.append({
+                "userId": user.userId,
+                "displayName": user.displayName
+            })
+
+    # send presence update to the websocket
+    await ws.send_json({
+        "type": "presence",
+        "users": online_users,
+        "count": len(online_users)
+    })
+
+
+
 # In memory store for session maintenance (for live chat & presence APIs)
 active_connections: dict[str, WebSocket] = {}
 
@@ -70,21 +110,33 @@ async def session(ws:WebSocket, userId: str):
     await ws.accept()
     active_connections[userId] = ws # add new connection
 
+    send_presence_update(ws) # send initial presence update
+
     try:
         while True:
             # TODO: consider how we can add HTTP header to receive more than just messages.
             data = await ws.receive_json() 
 
-            # Pydantic for validating the JSON we get from client matches Message
-            try:
-                msg = Message(**data)
-            except ValidationError as e:
-                # keep connection alive, but let client know structure is wrong
-                await ws.send_json({"error": "Invalid message format", "details": str(e)})
-                continue
+            message_type = data.get("type", "message")
 
-            # Store the validated Message in the Database
-            store_message(msg, userId)
+            # Pydantic for validating the JSON we get from client matches Message
+            if message_type == "message":
+                try:
+                    msg = Message(**data)
+                    store_message(msg, userId)
+                except ValidationError as e:
+                    await ws.send_json({
+                        "type": "error",
+                        "error": "Invalid message format",
+                        "details": str(e)
+                    })
+            elif message_type == "presence":
+                await send_presence_update(userId)
+            else:
+                await ws.send_json({
+                    "type": "error",
+                    "error": "Unknown message type: {message_type}"
+                })
             
     except WebSocketDisconnect:
         active_connections.pop(userId, None) # remove connection from record
