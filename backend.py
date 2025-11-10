@@ -110,7 +110,7 @@ async def session(ws:WebSocket, userId: str):
     await ws.accept()
     active_connections[userId] = ws # add new connection
 
-    send_presence_update(ws) # send initial presence update
+    await send_presence_update(ws) # send initial presence update
 
     try:
         while True:
@@ -131,11 +131,11 @@ async def session(ws:WebSocket, userId: str):
                         "details": str(e)
                     })
             elif message_type == "presence":
-                await send_presence_update(userId)
+                await send_presence_update(ws)
             else:
                 await ws.send_json({
                     "type": "error",
-                    "error": "Unknown message type: {message_type}"
+                    "error": f"Unknown message type: {message_type}"
                 })
             
     except WebSocketDisconnect:
@@ -274,11 +274,11 @@ def fetch_online_users(userId: str = None):
                     "displayName": user.displayName
                 })
             
-            # return presence status
-            return {
-                "onlineUser": online_users,
-                "count": len(online_users)
-            }
+        # return presence status
+        return {
+            "onlineUser": online_users,
+            "count": len(online_users)
+        }
 
 @app.get("/")
 async def root():
