@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 import sqlite3
@@ -117,7 +117,7 @@ async def session(ws:WebSocket, userId: str):
             # TODO: consider how we can add HTTP header to receive more than just messages.
             data = await ws.receive_json() 
 
-            message_type = data.get("type", "message")
+            message_type = data.get("type", "message") # default to message type
 
             # Pydantic for validating the JSON we get from client matches Message
             if message_type == "message":
@@ -244,7 +244,7 @@ def fetch_all_users(search: str = None):
 
     return {"users": users, "is_search": search is not None}
 
-#  Get all online users
+# Get all online users
 @app.get("/api/presence")
 def fetch_online_users(userId: str = None):
     """Get all online users, optionally excluding the requesting userId"""
