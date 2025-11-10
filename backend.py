@@ -66,28 +66,57 @@ async def session(ws:WebSocket, userId: str):
         await ws.close(code=4401, reason="unauthorized")
         return
     
-    # await to begin the ws connection until we confirm FastAPI sent it
     await ws.accept()
-    active_connections[userId] = ws # add new connection
+    active_connections[userId] = ws # record new connection
 
     try:
         while True:
-            # TODO: consider how we can add HTTP header to receive more than just messages.
             data = await ws.receive_json() 
 
-            # Pydantic for validating the JSON we get from client matches Message
             try:
-                msg = Message(**data)
+                msg: Message = Message(**data)
             except ValidationError as e:
                 # keep connection alive, but let client know structure is wrong
                 await ws.send_json({"error": "Invalid message format", "details": str(e)})
                 continue
 
-            # Store the validated Message in the Database
-            store_message(msg, userId)
+            # validate sender is not impersonating someone else
+            if msg.senderId != userId:
+                await ws.send_json({
+                    "error": "Unauthorized",
+                    "details": "Cannot send messages as another user"
+                })
+                continue
+
+            # validate recipient exists
+            recipient = get_validated_user(msg.receiverId)
+            if not recipient:
+                await ws.send_json({
+                    "error": "Invalid recipient",
+                    "details": "Recipient does not exist"
+                })
+                continue
             
+            try:
+                store_message(msg, userId)
+            except Exception as e:
+                await ws.send_json({
+                    "error": "Encountered an error when storing the message. Message may still be sent", 
+                    "details": str(e)
+                })
+
+            # if recipient is online, pipe the message straight to them
+            if recipient.userId in active_connections:
+                await active_connections[recipient.userId].send_json(
+                    msg.model_dump()
+                )
+
     except WebSocketDisconnect:
         active_connections.pop(userId, None) # remove connection from record
+    except Exception as e:
+        # Log unexpected errors
+        print(f"Unexpected websocket error for user {userId}: {e}")
+        active_connections.pop(userId, None)
 
 
 # Post a generic HTTP message
