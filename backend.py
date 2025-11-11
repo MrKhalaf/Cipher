@@ -68,10 +68,7 @@ async def send_presence_update(ws: WebSocket):
         user = get_validated_user(uid)
         # only add if user is valid
         if user:
-            online_users.append({
-                "userId": user.userId,
-                "displayName": user.displayName
-            })
+            online_users.append(user)
 
     # send presence update to the websocket
     await ws.send_json({
@@ -264,10 +261,7 @@ def fetch_online_users(userId: str = None):
             
             # only add if user is valid
             if user:
-                online_users.append({
-                    "userId": uid,
-                    "displayName": user.displayName
-                })
+                online_users.append(user)
             
         # return presence status
         return {
