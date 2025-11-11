@@ -51,7 +51,7 @@ def get_validated_user(userId:str):
 def get_user_from_db(userId: str):
     with sqlite3.connect('storage/cipher.db') as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT displayName FROM user WHERE userId = (?)', (userId,))
+        cursor.execute('SELECT displayName FROM users WHERE userId = (?)', (userId,))
         result = cursor.fetchone()
 
         if result:
