@@ -48,16 +48,6 @@ def get_validated_user(userId:str):
             return User(userId=userId, displayName=result[0])
         return None
 
-def get_user_from_db(userId: str):
-    with sqlite3.connect('storage/cipher.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT displayName FROM users WHERE userId = (?)', (userId,))
-        result = cursor.fetchone()
-
-        if result:
-            return User(userId=userId, displayName=result[0])
-        return None
-
 '''Store message in the central messages table. Returns true if message is stored'''
 def store_message(msg: Message, senderId: str):
     with sqlite3.connect('storage/cipher.db') as conn:
@@ -84,7 +74,7 @@ async def get_online_users(ws: WebSocket):
                 online_users.append(User(userId=uid, displayName=result[0]))
 
     # send the online users list to the websocket
-    await ws.send_json({"users": online_users})
+    await ws.send_json({"users": [user.dict() for user in online_users]})
 
 
 
@@ -273,7 +263,7 @@ def fetch_online_users(userId: str = None):
     # If userId is provided, return only that user's presence status
     if userId:
         online = userId in active_connections # check if user is online
-        user = get_user_from_db(userId) # get user details
+        user = get_validated_user(userId)
 
         # return presence status
         return {
