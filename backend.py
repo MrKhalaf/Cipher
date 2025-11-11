@@ -29,12 +29,6 @@ class Message(BaseModel):
 class WebSocketMessage(BaseModel):
     type: str  # e.g., "message", "presence"
 
-# Chat message
-class ChatMessage(WebSocketMessage):
-    type: Literal["message"] = "message"
-    receiver: str
-    content: str
-
 # Presence update
 class PresenceRequest(WebSocketMessage):
     type: Literal["presence"] = "presence"
