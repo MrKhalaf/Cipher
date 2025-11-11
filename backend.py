@@ -57,25 +57,24 @@ def store_message(msg: Message, senderId: str):
                        )
         conn.commit() # push to db
 
-async def send_presence_update(ws: WebSocket):
+async def get_online_users(ws: WebSocket):
     """Sends presence update list to the web socket connections"""
     # List of online users
     online_users = []
 
     # loop through the active connections and get users ids
     for uid in active_connections.keys():
-        # validate user exists
-        user = get_validated_user(uid)
-        # only add if user is valid
-        if user:
-            online_users.append(user)
+        # get user from the db
+        with sqlite3.connect('storage/cipher.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT displayName FROM users WHERE userId = ?', (uid,))
+            result = cursor.fetchone()
 
-    # send presence update to the websocket
-    await ws.send_json({
-        "type": "presence",
-        "users": online_users,
-        "count": len(online_users)
-    })
+            if result:
+                online_users.append(User(userId=uid, displayName=result[0]))
+
+    # send the online users list to the websocket
+    await ws.send_json({"users": online_users})
 
 
 
@@ -97,7 +96,7 @@ async def session(ws:WebSocket, userId: str):
     await ws.accept()
     active_connections[userId] = ws # add new connection
 
-    await send_presence_update(ws) # send initial presence update
+    await get_online_users(ws) # send initial presence update
 
     try:
         while True:
@@ -121,7 +120,7 @@ async def session(ws:WebSocket, userId: str):
             
             # Handle presence request
             elif message_type == "presence":
-                await send_presence_update(ws)
+                await get_online_users(ws)
             
             # Unknown message type
             else:
