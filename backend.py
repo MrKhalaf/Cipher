@@ -25,12 +25,8 @@ class Message(BaseModel):
     receiverId: str
     content: str
 
-# Base class for WebSocket messages
-class WebSocketMessage(BaseModel):
-    type: str  # e.g., "message", "presence"
-
 # Presence update
-class PresenceRequest(WebSocketMessage):
+class PresenceRequest(BaseModel):
     type: Literal["presence"] = "presence"
 
 # Util functions
