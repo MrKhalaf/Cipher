@@ -57,8 +57,8 @@ def store_message(msg: Message, senderId: str):
                        )
         conn.commit() # push to db
 
+'''Send presence/online users update to the websocket connections'''
 async def get_online_users(ws: WebSocket):
-    """Sends presence update list to the web socket connections"""
     # List of online users
     online_users = []
 
