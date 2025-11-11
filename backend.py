@@ -103,15 +103,13 @@ async def session(ws:WebSocket, userId: str):
         await ws.close(code=4401, reason="unauthorized")
         return
     
-    # await to begin the ws connection until we confirm FastAPI sent it
     await ws.accept()
-    active_connections[userId] = ws # add new connection
+    active_connections[userId] = ws # record new connection
 
     await get_online_users(ws) # send initial presence update
 
     try:
         while True:
-            # TODO: consider how we can add HTTP header to receive more than just messages.
             data = await ws.receive_json() 
 
             message_type = data.get("type", "message") # default to message type
@@ -140,8 +138,31 @@ async def session(ws:WebSocket, userId: str):
                     "error": f"Unknown message type: {message_type}"
                 })
             
+            try:
+                store_message(msg, userId)
+            except Exception as e:
+                await ws.send_json({
+                    "error": "Encountered an error when storing the message. Message may still be sent", 
+                    "details": str(e)
+                })
+
+            # if recipient is online, pipe the message straight to them
+            if recipient.userId in active_connections:
+                try:
+                    await active_connections[recipient.userId].send_json(
+                        msg.model_dump()
+                    )
+                except Exception:
+                    # Recipient disconnected between check and send
+                    # Message already stored in DB, so just continue
+                    pass
+
     except WebSocketDisconnect:
         active_connections.pop(userId, None) # remove connection from record
+    except Exception as e:
+        # Log unexpected errors
+        print(f"Unexpected websocket error for user {userId}: {e}")
+        active_connections.pop(userId, None)
 
 
 # Post a generic HTTP message
