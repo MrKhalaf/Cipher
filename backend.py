@@ -48,6 +48,16 @@ def get_validated_user(userId:str):
             return User(userId=userId, displayName=result[0])
         return None
 
+def get_user_from_db(userId: str):
+    with sqlite3.connect('storage/cipher.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT displayName FROM user WHERE userId = (?)', (userId,))
+        result = cursor.fetchone()
+
+        if result:
+            return User(userId=userId, displayName=result[0])
+        return None
+
 '''Store message in the central messages table. Returns true if message is stored'''
 def store_message(msg: Message, senderId: str):
     with sqlite3.connect('storage/cipher.db') as conn:
@@ -87,6 +97,7 @@ active_connections: dict[str, WebSocket] = {}
 @app.websocket("/ws/session")
 async def session(ws:WebSocket, userId: str):
     user: User = get_validated_user(userId)
+    
     # return unauthorized if user id doesnt exist
     if not user:
         await ws.close(code=4401, reason="unauthorized")
@@ -238,11 +249,10 @@ def fetch_all_users(search: str = None):
 # Get all online users
 @app.get("/api/presence")
 def fetch_online_users(userId: str = None):
-    """Get all online users, optionally excluding the requesting userId"""
     # If userId is provided, return only that user's presence status
     if userId:
         online = userId in active_connections # check if user is online
-        user = get_validated_user(userId) # get user details
+        user = get_user_from_db(userId) # get user details
 
         # return presence status
         return {
@@ -252,21 +262,8 @@ def fetch_online_users(userId: str = None):
         }
     # Otherwise, return the list of all online users
     else:
-        online_users = [] # list of online users
-        
-        # loop through the active connections and get users ids
-        for uid in active_connections.keys():
-            user = get_validated_user(uid) # validate user exists
-            
-            # only add if user is valid
-            if user:
-                online_users.append(user)
-            
-        # return presence status
-        return {
-            "onlineUser": online_users,
-            "count": len(online_users)
-        }
+        # return all the online users from active connections
+        return {"onlineUser": active_connections.keys()}
 
 @app.get("/")
 async def root():
