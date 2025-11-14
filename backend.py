@@ -1,6 +1,6 @@
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 import sqlite3
@@ -25,8 +25,6 @@ class Message(BaseModel):
     content: str
 
 # Util functions
-
-
 def parse_time(time_str: str):
     """Convert SQLite timestamp str to datetime object"""
     if isinstance(time_str, str):
@@ -52,42 +50,74 @@ def store_message(msg: Message, senderId: str):
                        )
         conn.commit() # push to db
 
+'''Send presence/online users update to the websocket connections'''
+async def get_online_users(ws: WebSocket):
+    # List of online users
+    online_users = []
+
+    userIds = list(active_connections.keys())
+
+    if userIds:
+        with sqlite3.connect('storage/cipher.db') as conn:
+            cursor = conn.cursor()
+            placeholders = ','.join(['?'] * len(userIds))
+            query = f'SELECT userId, displayName FROM users WHERE userId IN ({placeholders})'
+            cursor.execute(query, userIds)
+            result = cursor.fetchall()
+
+            for userId, displayName in result:
+                online_users.append(User(userId=userId, displayName=displayName))
+    
+    await ws.send_json(online_users)
+
 # In memory store for session maintenance (for live chat & presence APIs)
-active_connections: dict[str, WebSocket] = {}
+active_connections = []
 
 # TODO: WS /ws/typing  
-# TODO: GET /api/presence
 
 @app.websocket("/ws/session")
 async def session(ws:WebSocket, userId: str):
     user: User = get_validated_user(userId)
+    
     # return unauthorized if user id doesnt exist
     if not user:
         await ws.close(code=4401, reason="unauthorized")
         return
     
     await ws.accept()
-    active_connections[userId] = ws # record new connection
+    active_connections[user] = ws # record new connection
+
+    await get_online_users(ws) # send initial presence update
 
     try:
         while True:
             data = await ws.receive_json() 
 
-            try:
-                msg: Message = Message(**data)
-            except ValidationError as e:
-                # keep connection alive, but let client know structure is wrong
-                await ws.send_json({"error": "Invalid message format", "details": str(e)})
-                continue
+            message_type = data.get("type", "message") # default to message type
 
-            # validate recipient exists
-            recipient = get_validated_user(msg.receiverId)
-            if not recipient:
+            # Pydantic for validating the JSON we get from client matches Message
+            # Handle chat message
+            if message_type == "message":
+                try:
+                    msg = Message(**data)
+                    store_message(msg, userId)
+                except ValidationError as e:
+                    await ws.send_json({
+                        "type": "error",
+                        "error": "Invalid message format",
+                        "details": str(e)
+                    })
+            
+            # Handle presence request
+            elif message_type == "presence":
+                await get_online_users(ws)
+            
+            # Unknown message type
+            else:
                 await ws.send_json({
-                    "error": "Invalid recipient",
-                    "details": "Recipient does not exist"
+                    "type": "error",
+                    "error": f"Unknown message type: {message_type}"
                 })
-                continue
             
             try:
                 store_message(msg, userId)
@@ -98,9 +128,9 @@ async def session(ws:WebSocket, userId: str):
                 })
 
             # if recipient is online, pipe the message straight to them
-            if recipient.userId in active_connections:
+            if user in active_connections:
                 try:
-                    await active_connections[recipient.userId].send_json(
+                    await active_connections[user.userId].send_json(
                         msg.model_dump()
                     )
                 except Exception:
