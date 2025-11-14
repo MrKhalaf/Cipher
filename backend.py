@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Literal
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,13 +24,7 @@ class Message(BaseModel):
     receiverId: str
     content: str
 
-# Presence update
-class PresenceRequest(BaseModel):
-    type: Literal["presence"] = "presence"
-
 # Util functions
-
-
 def parse_time(time_str: str):
     """Convert SQLite timestamp str to datetime object"""
     if isinstance(time_str, str):
@@ -62,27 +55,25 @@ async def get_online_users(ws: WebSocket):
     # List of online users
     online_users = []
 
-    # loop through the active connections and get users ids
-    for uid in active_connections.keys():
-        # get user from the db
+    userIds = list(active_connections.keys())
+
+    if userIds:
         with sqlite3.connect('storage/cipher.db') as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT displayName FROM users WHERE userId = ?', (uid,))
-            result = cursor.fetchone()
+            placeholders = ','.join(['?'] * len(userIds))
+            query = f'SELECT userId, displayName FROM users WHERE userId IN ({placeholders})'
+            cursor.execute(query, userIds)
+            result = cursor.fetchall()
 
-            if result:
-                online_users.append(User(userId=uid, displayName=result[0]))
-
-    # send the online users list to the websocket
-    await ws.send_json({"users": [user.dict() for user in online_users]})
-
-
+            for userId, displayName in result:
+                online_users.append(User(userId=userId, displayName=displayName))
+    
+    await ws.send_json(online_users)
 
 # In memory store for session maintenance (for live chat & presence APIs)
-active_connections: dict[str, WebSocket] = {}
+active_connections = {}
 
 # TODO: WS /ws/typing  
-# TODO: GET /api/presence
 
 @app.websocket("/ws/session")
 async def session(ws:WebSocket, userId: str):
@@ -94,7 +85,7 @@ async def session(ws:WebSocket, userId: str):
         return
     
     await ws.accept()
-    active_connections[userId] = ws # record new connection
+    active_connections[user] = ws # record new connection
 
     await get_online_users(ws) # send initial presence update
 
@@ -137,9 +128,9 @@ async def session(ws:WebSocket, userId: str):
                 })
 
             # if recipient is online, pipe the message straight to them
-            if recipient.userId in active_connections:
+            if user in active_connections:
                 try:
-                    await active_connections[recipient.userId].send_json(
+                    await active_connections[user.userId].send_json(
                         msg.model_dump()
                     )
                 except Exception:
@@ -256,25 +247,6 @@ def fetch_all_users(search: str = None):
         users = [User(userId=row['userId'], displayName=row['displayName']) for row in cursor.fetchall()]
 
     return {"users": users, "is_search": search is not None}
-
-# Get all online users
-@app.get("/api/presence")
-def fetch_online_users(userId: str = None):
-    # If userId is provided, return only that user's presence status
-    if userId:
-        online = userId in active_connections # check if user is online
-        user = get_validated_user(userId)
-
-        # return presence status
-        return {
-            "userId": userId,
-            "displayName": user.displayName if user else None,
-            "isOnline": online
-        }
-    # Otherwise, return the list of all online users
-    else:
-        # return all the online users from active connections
-        return {"onlineUser": active_connections.keys()}
 
 @app.get("/")
 async def root():
