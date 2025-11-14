@@ -71,7 +71,7 @@ async def get_online_users(ws: WebSocket):
     await ws.send_json(online_users)
 
 # In memory store for session maintenance (for live chat & presence APIs)
-active_connections = {}
+active_connections = []
 
 # TODO: WS /ws/typing  
 
